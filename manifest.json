@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Odoo Lens",
+  "version": "0.1.0",
+  "description": "Browse, edit and trace Odoo data from a small popup, using your Odoo login.",
+  "minimum_chrome_version": "111",
+  "action": {
+    "default_title": "Odoo Lens",
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/web", "https://*/web", "http://*/web?*", "https://*/web?*", "http://*/web/*", "https://*/web/*",
+        "http://*/odoo", "https://*/odoo", "http://*/odoo?*", "https://*/odoo?*", "http://*/odoo/*", "https://*/odoo/*"
+      ],
+      "js": ["src/page/hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}
