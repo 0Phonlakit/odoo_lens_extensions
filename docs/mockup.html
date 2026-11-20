@@ -1,0 +1,830 @@
+<title>Odoo Data Lens</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a fake browser window - Odoo page on the left, the extension's side panel docked on the right; stacks at phone width. */
+:root {
+  --brand: #2B3990; --brand-2: #515DAA; --brand-3: #6F85C2;
+  --hl: #FFCB1F; --hl-2: #FFDF4F; --hl-bg: #FFEB95;
+  --bg: #EEF0F7; --surface: #FFFFFF; --surface-2: #F5F6FB; --line: #DADDEB;
+  --fg: #3E3F42; --fg-2: #58595B; --muted: #808285;
+  --on-brand: #FFFFFF; --warn: #8A6A00; --danger: #C62828; --danger-bg: #FDECEC; --ok: #2E7D32; --ok-bg: #E7F4E8;
+  --odoo: #714B67; --chip: #E6E9F5; --focus: #2B3990;
+  --f-body: "IBM Plex Sans Thai", "Thonburi", "Leelawadee UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --brand: #6F85C2; --brand-2: #8A9BD0; --brand-3: #515DAA;
+  --bg: #12141C; --surface: #1B1E2A; --surface-2: #232736; --line: #343a50;
+  --fg: #ECEDF3; --fg-2: #C9CBD6; --muted: #9A9CA6;
+  --on-brand: #0E1020; --warn: #FFDF4F; --danger: #FF8A80; --danger-bg: #3a1f22; --ok: #81C784; --ok-bg: #1d3320;
+  --odoo: #B98AAE; --chip: #2B3046; --hl-bg: #4a3f12; --focus: #FFCB1F; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --brand: #6F85C2; --brand-2: #8A9BD0; --brand-3: #515DAA;
+  --bg: #12141C; --surface: #1B1E2A; --surface-2: #232736; --line: #343a50;
+  --fg: #ECEDF3; --fg-2: #C9CBD6; --muted: #9A9CA6;
+  --on-brand: #0E1020; --warn: #FFDF4F; --danger: #FF8A80; --danger-bg: #3a1f22; --ok: #81C784; --ok-bg: #1d3320;
+  --odoo: #B98AAE; --chip: #2B3046; --hl-bg: #4a3f12; --focus: #FFCB1F; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 14px; line-height: 1.5;
+  padding-block: 20px 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+button, input, select, textarea { font: inherit; color: inherit }
+button { cursor: pointer }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 14px }
+
+.intro { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between }
+.intro h1 { margin: 0; font-size: 20px; color: var(--brand); text-wrap: balance }
+.intro p { margin: 0; color: var(--muted); font-size: 13px }
+.role { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface) }
+.role button { border: 0; background: transparent; padding: 6px 12px; font-size: 13px }
+.role button[aria-pressed="true"] { background: var(--brand); color: var(--on-brand) }
+
+/* browser chrome */
+.browser { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(20,25,60,.10) }
+.chrome { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--surface-2); border-bottom: 1px solid var(--line) }
+.dots { display: flex; gap: 6px } .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--line) }
+.url { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
+  font-family: var(--f-mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ext-btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 10px; font-size: 12px; display: flex; gap: 6px; align-items: center }
+.ext-btn[aria-pressed="true"] { border-color: var(--brand); color: var(--brand) }
+.logo { width: 16px; height: 16px; border-radius: 4px; background: var(--brand); position: relative; flex: none }
+.logo::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; border: 2px solid var(--hl) }
+
+.stage { position: relative; min-height: 640px }
+.stage.closed .panel { display: none }
+
+/* fake odoo page */
+.odoo { min-width: 0; min-height: 640px; background: var(--surface-2); display: flex; flex-direction: column }
+.odoo-top { background: var(--odoo); color: #fff; padding: 8px 16px; font-size: 13px; display: flex; gap: 16px }
+.odoo-top b { font-weight: 600 }
+.odoo-bc { padding: 10px 16px; font-size: 13px; color: var(--muted) } .odoo-bc b { color: var(--fg) }
+.odoo-sheet { margin: 0 16px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 20px; display: grid; gap: 14px }
+.odoo-sheet h2 { margin: 0; font-size: 24px }
+.status { display: flex; gap: 4px; flex-wrap: wrap; font-size: 12px }
+.status span { padding: 2px 10px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted) }
+.status span.on { background: var(--odoo); color: #fff; border-color: var(--odoo) }
+.kv { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 6px 24px; font-size: 13px }
+.kv div { display: flex; gap: 8px } .kv dt { color: var(--muted); min-width: 92px } .kv dd { margin: 0 }
+.lines { width: 100%; border-collapse: collapse; font-size: 13px }
+.lines th, .lines td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line) }
+.lines th { color: var(--muted); font-weight: 500 } .num { text-align: right !important; font-variant-numeric: tabular-nums }
+
+/* side panel */
+.panel { position: absolute; top: 6px; right: 12px; width: 360px; max-width: calc(100% - 24px); height: 560px; max-height: calc(100% - 12px);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 16px 40px rgba(20,25,60,.22);
+  display: flex; flex-direction: column; overflow: hidden; z-index: 5 }
+.p-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line) }
+.p-head .name { font-weight: 600; color: var(--brand) }
+.p-head .sp { flex: 1 }
+.icon-btn { border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 2px 8px; color: var(--fg-2) }
+.icon-btn:hover { border-color: var(--line) }
+.db { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--danger-bg); --env: var(--danger) }
+.db.staging { background: var(--hl-bg); --env: var(--warn) }
+.db .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--env); flex: none }
+.db-main { flex: 1; min-width: 0; display: grid }
+.dbname { display: flex; gap: 6px; align-items: baseline; min-width: 0 }
+.dbname b { font-family: var(--f-mono); font-size: 13px; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.dbname .tag { font-size: 10px; letter-spacing: .08em; font-weight: 700; color: var(--env) }
+.db .sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.btn.sm { padding: 3px 10px; font-size: 12px }
+.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; vertical-align: -3px }
+.btn, .icon-btn { display: inline-flex; align-items: center; gap: 6px }
+.ibtn { width: 28px; height: 28px; display: inline-grid; place-items: center; border: 1px solid transparent; background: transparent; border-radius: 6px; color: var(--fg-2); padding: 0 }
+.ibtn:hover { background: var(--surface-2); border-color: var(--line); color: var(--brand) }
+.ibtn.danger:hover { color: var(--danger); background: var(--danger-bg) }
+.toolbar { display: flex; align-items: center; gap: 4px }
+.toolbar .sp { flex: 1 }
+.grid th.act, .grid td.act { position: sticky; right: 0; background: var(--surface); border-left: 1px solid var(--line); cursor: default; white-space: nowrap }
+.grid th.act { background: var(--surface-2); z-index: 1 }
+.grid td.act { padding: 2px 4px }
+.delbar { border: 1px solid var(--danger); background: var(--danger-bg); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: var(--surface); font-weight: 600 }
+.tabs { display: flex; border-bottom: 1px solid var(--line); padding: 0 8px }
+.tabs button { border: 0; background: transparent; padding: 8px 12px; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 6px; align-items: center }
+.tabs button[aria-selected="true"] { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600 }
+.count { font-size: 11px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--chip); color: var(--brand); text-align: center; font-weight: 600 }
+.count.new { background: var(--hl); color: #1d1d1f }
+.odoo-btns { display: flex; gap: 6px; flex-wrap: wrap }
+.odoo-btns button { border: 1px solid var(--line); background: var(--surface); border-radius: 4px; padding: 4px 10px; font-size: 12px }
+.odoo-btns button.main { background: var(--odoo); border-color: var(--odoo); color: #fff }
+.loglist { display: grid; gap: 8px }
+.log { border: 1px solid var(--line); border-left: 3px solid var(--k); border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px; --k: var(--brand-3) }
+.log.k-write { --k: var(--brand) } .log.k-create { --k: var(--ok) } .log.k-delete, .log.k-error { --k: var(--danger) } .log.k-action { --k: var(--hl) }
+.log.k-error { background: var(--danger-bg) }
+.log-head { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--muted) }
+.log-head .kind { font-weight: 700; color: var(--fg-2); letter-spacing: .04em }
+.log-head .src { margin-left: auto; padding: 0 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line) }
+.log-head .t { font-family: var(--f-mono); font-variant-numeric: tabular-nums }
+.ltext { font-size: 13px }
+.lchg { font-size: 12px; display: grid; gap: 2px }
+.lchg del { color: var(--danger) } .lchg ins { color: var(--ok); text-decoration: none; font-weight: 600 }
+.log details { font-size: 11px; color: var(--muted) }
+.log summary { cursor: pointer }
+.log details code { display: block; margin-top: 4px; font-family: var(--f-mono); background: var(--surface-2); padding: 6px 8px; border-radius: 6px; overflow-wrap: anywhere; color: var(--fg-2) }
+.legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 16px }
+.legend div { display: grid; grid-template-columns: 32px minmax(0,1fr); gap: 2px 8px; align-items: center }
+.legend .sw { grid-row: span 2; width: 32px; height: 32px; border-radius: 8px; background: var(--chip); color: var(--brand); display: grid; place-items: center }
+.legend .sw.danger { background: var(--danger-bg); color: var(--danger) }
+.legend b { font-weight: 600; font-size: 13px }
+.legend span:last-child { font-size: 12px; color: var(--muted) }
+.legend code { font-family: var(--f-mono); font-size: 11px }
+.pill { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--brand); font-weight: 600 }
+.p-body { flex: 1; overflow: auto; padding: 12px; display: grid; gap: 14px; align-content: start; min-height: 0 }
+.p-foot { border-top: 1px solid var(--line); padding: 10px 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 8px; background: var(--surface) }
+.ctx { background: var(--surface-2) }
+.label { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600 }
+.ctx-title { font-weight: 600 }
+.ctx-title small { color: var(--muted); font-family: var(--f-mono); font-weight: 400; font-size: 12px }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 12px; font-size: 13px }
+.btn:hover { border-color: var(--brand-3) }
+.btn.primary { background: var(--brand); color: var(--on-brand); border-color: var(--brand); font-weight: 600 }
+.btn.hl { background: var(--hl); color: #1d1d1f; border-color: var(--hl); font-weight: 600 }
+.btn.ghost { border-color: transparent; color: var(--brand) }
+.btn:disabled { opacity: .45; cursor: not-allowed }
+.search { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--surface) }
+.list { display: grid; gap: 2px }
+.list button { text-align: left; border: 0; background: transparent; padding: 8px; border-radius: 8px; display: grid; gap: 1px }
+.list button:hover { background: var(--surface-2) }
+.list b { font-weight: 500 } .list span { color: var(--muted); font-size: 12px }
+.sec-title { display: flex; justify-content: space-between; align-items: baseline }
+
+.field { display: grid; gap: 4px }
+.field > span { font-size: 12px; color: var(--muted) }
+select, input[type="text"], input[type="password"], input[type="date"], textarea { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; background: var(--surface); min-width: 0 }
+.chips { display: flex; gap: 6px; flex-wrap: wrap }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 10px; font-size: 12px }
+.chip[aria-pressed="true"] { background: var(--chip); border-color: var(--brand-3); color: var(--brand); font-weight: 600 }
+.filter { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,.9fr) minmax(0,1.2fr) auto; gap: 6px; align-items: center }
+.filter select, .filter input { width: 100% }
+.x { border: 0; background: transparent; color: var(--muted); font-size: 16px; padding: 0 4px }
+
+.tbl-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; max-height: 250px }
+table.grid { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums }
+.grid th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 600; color: var(--fg-2); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; cursor: pointer }
+.grid td { padding: 0; border-bottom: 1px solid var(--line); white-space: nowrap }
+.grid td > span, .grid td > input { display: block; padding: 6px 8px; width: 100%; border: 0; background: transparent; min-width: 90px }
+.grid td.edit:hover { background: var(--surface-2) }
+.grid td.dirty { background: var(--hl-bg) }
+.grid td a { color: var(--brand); padding: 6px 8px; display: block; text-decoration: none; font-family: var(--f-mono); font-size: 12px }
+.grid td a:hover { text-decoration: underline }
+.state { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--chip); color: var(--fg-2) }
+.state.sale { background: var(--ok-bg); color: var(--ok) } .state.cancel { background: var(--danger-bg); color: var(--danger) }
+.meta { font-size: 12px; color: var(--muted) }
+
+.savebar { background: var(--hl-bg); border: 1px solid var(--hl); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px }
+.diff { font-size: 12px; display: grid; gap: 4px }
+.diff div { font-family: var(--f-mono) } .diff del { color: var(--danger) } .diff ins { color: var(--ok); text-decoration: none; font-weight: 600 }
+
+.chain { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-family: var(--f-mono); font-size: 11px; color: var(--muted) }
+.chain span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; color: var(--fg) }
+.chain span.me { background: var(--brand); border-color: var(--brand); color: var(--on-brand) }
+.via { display: grid; gap: 4px; background: var(--surface-2); border-radius: 8px; padding: 8px }
+.via code, .meta code { font-family: var(--f-mono); font-size: 11px; background: var(--chip); color: var(--brand); padding: 0 5px; border-radius: 4px; overflow-wrap: anywhere }
+table.map { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums }
+.map th, .map td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left }
+.map th { color: var(--muted); font-weight: 500 }
+.map td.num { font-family: var(--f-mono); font-size: 11px }
+.code { font-family: var(--f-mono); font-size: 12px; width: 100%; min-height: 110px; resize: vertical }
+.kvs { display: grid; gap: 0; font-size: 13px }
+.kvs div { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.2fr); gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line) }
+.kvs code { font-family: var(--f-mono); font-size: 11px; color: var(--muted); display: block }
+.toast { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--fg); color: var(--surface); padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 9; max-width: 90% }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px }
+.notes .card h3 { margin: 0; font-size: 14px; color: var(--brand) }
+.notes .card p { margin: 0; color: var(--fg-2); font-size: 13px }
+
+@media (max-width: 600px) {
+  .panel { left: 8px; right: 8px; width: auto; max-width: none }
+  .kv { grid-template-columns: minmax(0,1fr) }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/><path d="M14.5 5.5l3 3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8M21 3v5h-5"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+</svg>
+<div class="wrap">
+  <div class="intro">
+    <div>
+      <h1>Odoo Data Lens · mockup</h1>
+      <p>Chrome extension แบบ popup เล็กๆ กดไอคอน Data Lens บน toolbar เพื่อเปิดหรือปิด ข้อมูลทั้งหมดในหน้านี้เป็นตัวอย่าง ไม่ได้เชื่อมต่อจริง</p>
+    </div>
+    <div class="row">
+      <span class="meta">ลองสลับสิทธิ์:</span>
+      <div class="role" role="group" aria-label="สิทธิ์ผู้ใช้">
+        <button id="role-viewer" type="button" aria-pressed="false">Viewer</button>
+        <button id="role-editor" type="button" aria-pressed="true">Editor</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="browser">
+    <div class="chrome">
+      <div class="dots"><i></i><i></i><i></i></div>
+      <button class="ibtn" id="reload" type="button" title="Reload หน้าเว็บ (ล้าง log)" aria-label="Reload หน้าเว็บ"><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+      <div class="url">https://demo.example.com/odoo/sales/42</div>
+      <button class="ext-btn" id="toggle-panel" type="button" aria-pressed="true"><span class="logo"></span>Data Lens</button>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="odoo">
+        <div class="odoo-top"><b>Sales</b><span>Orders</span><span>To Invoice</span><span>Products</span><span>Reporting</span></div>
+        <div class="odoo-bc">Quotations / <b>SO0042</b></div>
+        <div class="odoo-sheet">
+          <div class="odoo-btns" id="odoo-btns">
+            <button class="main" type="button" data-odoo="invoice">Create Invoice</button>
+            <button type="button" data-odoo="email">Send by Email</button>
+            <button type="button" data-odoo="cancel">Cancel</button>
+          </div>
+          <div class="status"><span>Quotation</span><span>Quotation Sent</span><span class="on">Sales Order</span></div>
+          <h2>SO0042</h2>
+          <dl class="kv">
+            <div><dt>Customer</dt><dd>บจก. สยามวัสดุภัณฑ์</dd></div>
+            <div><dt>Order Date</dt><dd>12/11/2026</dd></div>
+            <div><dt>Salesperson</dt><dd>สมชาย ใจดี</dd></div>
+            <div><dt>Payment Terms</dt><dd>30 Days</dd></div>
+          </dl>
+          <table class="lines">
+            <thead><tr><th>Product</th><th class="num">Qty</th><th class="num">Unit Price</th><th class="num">Subtotal</th></tr></thead>
+            <tbody>
+              <tr><td>ท่อ PVC 4 นิ้ว</td><td class="num">120</td><td class="num">185.00</td><td class="num">22,200.00</td></tr>
+              <tr><td>ข้อต่อสามทาง 4 นิ้ว</td><td class="num">60</td><td class="num">42.00</td><td class="num">2,520.00</td></tr>
+              <tr><td>กาวทาท่อ 1 กก.</td><td class="num">10</td><td class="num">310.00</td><td class="num">3,100.00</td></tr>
+            </tbody>
+          </table>
+          <div class="meta" style="text-align:right">Total: <b>29,767.40</b> (incl. VAT 7%)</div>
+        </div>
+      </div>
+
+      <aside class="panel" aria-label="Data Lens">
+        <div class="p-head">
+          <span class="logo"></span><span class="name">Data Lens</span>
+          <button class="icon-btn" id="btn-back" type="button" hidden><svg class="i" aria-hidden="true"><use href="#i-back"/></svg>กลับ</button>
+          <span class="sp"></span>
+          <span class="pill" id="role-pill">Editor</span>
+        </div>
+        <div class="db" id="db-bar">
+          <span class="dot"></span>
+          <div class="db-main">
+            <div class="dbname"><span class="meta">DB</span><b id="db-name">kaw_prod</b><span class="tag" id="db-tag">PRODUCTION</span></div>
+            <div class="sub">demo.example.com · <span id="db-user">somchai@example.com</span></div>
+          </div>
+          <button class="btn sm" id="btn-pass" type="button"><svg class="i" aria-hidden="true"><use href="#i-key"/></svg>เปลี่ยนรหัสผ่าน</button>
+        </div>
+        <div class="tabs" role="tablist">
+          <button id="tab-data" type="button" role="tab" aria-selected="true">ข้อมูล</button>
+          <button id="tab-log" type="button" role="tab" aria-selected="false">Log ของหน้านี้ <span class="count" id="log-count">0</span></button>
+        </div>
+        <div class="p-body" id="body"></div>
+        <div class="p-foot" id="foot" hidden></div>
+        <div class="toast" id="toast" hidden></div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="card" style="grid-column:1 / -1"><h3>ไอคอนที่ใช้ (CRUD และเครื่องมือ)</h3>
+      <div class="legend">
+        <div><span class="sw"><svg class="i"><use href="#i-plus"/></svg></span><b>สร้าง</b><span><code>create()</code></span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-eye"/></svg></span><b>ดูรายละเอียด</b><span><code>read()</code></span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-pencil"/></svg></span><b>แก้ไข</b><span><code>write()</code></span></div>
+        <div><span class="sw danger"><svg class="i"><use href="#i-trash"/></svg></span><b>ลบ</b><span><code>unlink()</code> ต้องยืนยันก่อน</span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-check"/></svg></span><b>บันทึก</b><span>ยืนยันการแก้ไข</span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-x"/></svg></span><b>ยกเลิก</b><span>ทิ้งการแก้ไข / ปิด</span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-search"/></svg></span><b>ค้นหา / สร้าง query</b><span><code>search_read()</code></span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-filter"/></svg></span><b>กรอง</b><span>แก้เงื่อนไข (domain)</span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-refresh"/></svg></span><b>โหลดใหม่</b><span>ดึงข้อมูลล่าสุด</span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-download"/></svg></span><b>Export</b><span>Excel / CSV</span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-copy"/></svg></span><b>คัดลอก</b><span>เลขที่ / domain / JSON</span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-external"/></svg></span><b>เปิดใน Odoo</b><span>แท็บใหม่</span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-link"/></svg></span><b>เอกสารที่เชื่อมกัน</b><span>SO ↔ INV ↔ ใบส่งของ</span></div>
+        <div><span class="sw"><svg class="i"><use href="#i-key"/></svg></span><b>เปลี่ยนรหัสผ่าน</b><span><code>change_password()</code></span></div>
+      </div>
+    </div>
+    <div class="card"><h3>ไม่ต้องติดตั้งอะไรใน Odoo</h3><p>ใช้ session ที่ล็อกอินอยู่ เรียก JSON-RPC ของ Odoo (<code>search_read</code>, <code>read_group</code>, <code>write</code>) สิทธิ์และ record rule ของ Odoo ทำงานครบ</p></div>
+    <div class="card"><h3>แก้ไขผ่าน ORM</h3><p>แก้ cell แล้วกดบันทึก ระบบแสดงสรุปการเปลี่ยนแปลงก่อน แล้วเรียก <code>write()</code> ทำให้ compute, constraint และ chatter ทำงานเหมือนแก้ในหน้า Odoo</p></div>
+    <div class="card"><h3>แยกโปรเจกต์อัตโนมัติ</h3><p>เปิดเว็บ Odoo ไหน ก็เห็นข้อมูลของเว็บนั้น Query ที่บันทึกไว้แยกตามเว็บ แถบสีบอกว่าเป็น Production หรือ Staging</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const ORDERS = [
+    { id: 42, name: "SO0042", partner: "บจก. สยามวัสดุภัณฑ์", date: "2026-11-12", user: "สมชาย ใจดี", state: "sale", amount: 29767.40, delivery: "รอส่ง" },
+    { id: 41, name: "SO0041", partner: "หจก. เชียงใหม่ก่อสร้าง", date: "2026-11-11", user: "วิภา สุขสันต์", state: "sale", amount: 15840.00, delivery: "ส่งแล้ว" },
+    { id: 40, name: "SO0040", partner: "บจก. สยามวัสดุภัณฑ์", date: "2026-11-10", user: "สมชาย ใจดี", state: "draft", amount: 8250.00, delivery: "-" },
+    { id: 39, name: "SO0039", partner: "บจก. ไทยรุ่งเรืองค้าส่ง", date: "2026-11-08", user: "ประเสริฐ มั่นคง", state: "sale", amount: 112300.00, delivery: "รอส่ง" },
+    { id: 38, name: "SO0038", partner: "ร้าน ช่างเก่งการไฟฟ้า", date: "2026-11-07", user: "วิภา สุขสันต์", state: "cancel", amount: 4120.00, delivery: "-" },
+    { id: 37, name: "SO0037", partner: "บจก. ไทยรุ่งเรืองค้าส่ง", date: "2026-11-05", user: "ประเสริฐ มั่นคง", state: "sale", amount: 56890.00, delivery: "ส่งบางส่วน" },
+    { id: 36, name: "SO0036", partner: "หจก. เชียงใหม่ก่อสร้าง", date: "2026-11-03", user: "สมชาย ใจดี", state: "sent", amount: 21400.00, delivery: "-" },
+    { id: 35, name: "SO0035", partner: "บจก. อีสานเหล็กกล้า", date: "2026-11-02", user: "วิภา สุขสันต์", state: "sale", amount: 74560.00, delivery: "รอส่ง" },
+    { id: 34, name: "SO0034", partner: "ร้าน ช่างเก่งการไฟฟ้า", date: "2026-10-30", user: "ประเสริฐ มั่นคง", state: "sale", amount: 6980.00, delivery: "ส่งแล้ว" },
+    { id: 33, name: "SO0033", partner: "บจก. อีสานเหล็กกล้า", date: "2026-10-28", user: "สมชาย ใจดี", state: "sale", amount: 38200.00, delivery: "ส่งแล้ว" }
+  ];
+  const FIELDS = {
+    name:     { label: "เลขที่", tech: "name", type: "char" },
+    partner:  { label: "ลูกค้า", tech: "partner_id", type: "many2one" },
+    date:     { label: "วันที่สั่ง", tech: "date_order", type: "date" },
+    user:     { label: "พนักงานขาย", tech: "user_id", type: "many2one" },
+    state:    { label: "สถานะ", tech: "state", type: "selection" },
+    amount:   { label: "ยอดรวม", tech: "amount_total", type: "monetary" },
+    delivery: { label: "สถานะจัดส่ง", tech: "delivery_status", type: "selection" }
+  };
+  const STATES = { draft: "ใบเสนอราคา", sent: "ส่งใบเสนอราคาแล้ว", sale: "ยืนยันแล้ว", cancel: "ยกเลิก" };
+  const EDITABLE = ["user", "delivery"];
+  const OPS = { "=": "เท่ากับ", "!=": "ไม่เท่ากับ", "ilike": "มีคำว่า", ">=": "มากกว่าหรือเท่ากับ", "<=": "น้อยกว่าหรือเท่ากับ" };
+  const SAVED = [
+    { title: "ใบสั่งขายค้างส่ง", sub: "ใบสั่งขาย · สถานะ = ยืนยันแล้ว · จัดส่ง = รอส่ง", q: { cols: ["name","partner","date","amount","delivery"], filters: [{f:"state",op:"=",v:"sale"},{f:"delivery",op:"=",v:"รอส่ง"}], group: "" } },
+    { title: "ยอดขายแยกตามลูกค้า", sub: "ใบสั่งขาย · จัดกลุ่มตามลูกค้า · รวมยอด", q: { cols: ["partner","amount"], filters: [{f:"state",op:"=",v:"sale"}], group: "partner" } },
+    { title: "ใบเสนอราคาที่ยังไม่ปิด", sub: "ใบสั่งขาย · สถานะ = ใบเสนอราคา / ส่งแล้ว", q: { cols: ["name","partner","user","amount","state"], filters: [{f:"state",op:"!=",v:"sale"},{f:"state",op:"!=",v:"cancel"}], group: "" } }
+  ];
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const money = n => n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const thDate = d => d.split("-").reverse().join("/");
+  const icon = n => `<svg class="i" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  const DELETABLE = ["draft", "cancel"];
+
+  const LINKS = [
+    { kind: "ใบแจ้งหนี้", model: "account.move", ref: "INV/2026/00118", id: 118, status: "โพสต์แล้ว", amount: 26450.40,
+      via: ["sale.order.line.invoice_lines", "account.move.line.sale_line_ids"], table: "sale_order_line_invoice_rel", extra: 'invoice_origin = "SO0042"',
+      cols: ["SO line", "INV line"], lines: [["ท่อ PVC 4 นิ้ว", "101", "5501"], ["ข้อต่อสามทาง 4 นิ้ว", "102", "5502"]],
+      domain: "[('invoice_line_ids.sale_line_ids.order_id', '=', 42)]" },
+    { kind: "ใบแจ้งหนี้", model: "account.move", ref: "INV/2026/00131", id: 131, status: "ร่าง", amount: 3317.00,
+      via: ["sale.order.line.invoice_lines", "account.move.line.sale_line_ids"], table: "sale_order_line_invoice_rel", extra: 'invoice_origin = "SO0042"',
+      cols: ["SO line", "INV line"], lines: [["กาวทาท่อ 1 กก.", "103", "5630"]],
+      domain: "[('invoice_line_ids.sale_line_ids.order_id', '=', 42)]" },
+    { kind: "ใบส่งของ", model: "stock.picking", ref: "WH/OUT/00087", id: 87, status: "เสร็จแล้ว", amount: null,
+      via: ["sale.order.picking_ids", "stock.picking.sale_id"], table: null, extra: 'origin = "SO0042"',
+      cols: ["SO line", "stock.move"], lines: [["ท่อ PVC 4 นิ้ว", "101", "9120"], ["ข้อต่อสามทาง 4 นิ้ว", "102", "9121"], ["กาวทาท่อ 1 กก.", "103", "9122"]],
+      domain: "[('sale_id', '=', 42)]" }
+  ];
+  const db = { name: "kaw_prod", env: "prod", label: "Production", user: "somchai@example.com" };
+  let role = "editor";
+  let view = "home";
+  let history = [];
+  let query = { cols: ["name","partner","date","amount","state"], filters: [{ f: "state", op: "=", v: "sale" }], group: "" };
+  let edits = {};
+  let confirming = false;
+  let sortKey = null, sortDir = 1;
+  let deleting = null, formId = null, viewId = 42;
+
+  const KIND = { read: "อ่าน", write: "แก้ไข", create: "สร้าง", delete: "ลบ", action: "กดปุ่ม", error: "ผิดพลาด" };
+  const LOG_FILTERS = { all: ["ทั้งหมด", null], change: ["เปลี่ยนข้อมูล", ["write", "create", "delete", "action"]], read: ["อ่าน", ["read"]], error: ["ผิดพลาด", ["error"]] };
+  let tab = "data", logs = [], logFilter = "all", unseen = 0, sessionStart = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const hms = d => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const dmy = d => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${hms(d)}`;
+
+  function addLog(entry) {
+    logs.unshift({ at: new Date(), src: "Data Lens", ms: 20 + Math.floor(Math.random() * 180), ...entry });
+    if (tab !== "log") unseen++;
+  }
+  function pageLoad() {
+    logs = []; sessionStart = new Date();
+    addLog({ kind: "read", src: "Odoo", text: "เปิดหน้าใบสั่งขาย SO0042", call: "sale.order.web_read([42], specification={...})" });
+    addLog({ kind: "read", src: "Odoo", text: "โหลดรายการสินค้าใน SO0042 (3 รายการ)", call: "sale.order.line.web_search_read([('order_id', '=', 42)])" });
+    unseen = 0;
+  }
+  function runQuery() {
+    const n = results().length, fields = query.cols.map(k => `'${FIELDS[k].tech}'`).join(", ");
+    addLog(query.group
+      ? { kind: "read", text: `สรุปยอดใบสั่งขาย จัดกลุ่มตาม${FIELDS[query.group].label}`, call: `sale.order.read_group(${domainText()}, ['amount_total:sum'], ['${FIELDS[query.group].tech}'])` }
+      : { kind: "read", text: `ค้นหาใบสั่งขาย พบ ${n} แถว`, call: `sale.order.search_read(${domainText()}, [${fields}], limit=1000)` });
+    go("results");
+  }
+  function logView() {
+    const kinds = LOG_FILTERS[logFilter][1];
+    const shown = logs.filter(l => !kinds || kinds.includes(l.kind));
+    const chips = Object.entries(LOG_FILTERS).map(([k, [label, ks]]) => `<button class="chip" type="button" data-logf="${k}" aria-pressed="${k === logFilter}">${label} ${logs.filter(l => !ks || ks.includes(l.kind)).length}</button>`).join("");
+    const items = shown.map(l => `
+      <div class="log k-${l.kind}">
+        <div class="log-head"><span class="t">${hms(l.at)}</span><span class="kind">${KIND[l.kind]}</span><span>${l.ms} ms</span><span class="src">${l.src}</span></div>
+        <div class="ltext">${esc(l.text)}</div>
+        ${l.changes ? `<div class="lchg">${l.changes.map(([f, a, b]) => `<div>${esc(f)}: <del>${esc(a)}</del> → <ins>${esc(b)}</ins></div>`).join("")}</div>` : ""}
+        <details><summary>รายละเอียดทางเทคนิค</summary><code>${esc(l.call)}</code></details>
+      </div>`).join("");
+    return {
+      body: `<div class="meta">บันทึกตั้งแต่โหลดหน้า ${dmy(sessionStart)} · reload หน้าเว็บแล้ว log จะถูกล้าง</div><div class="chips">${chips}</div><div class="loglist">${items || `<div class="meta" style="padding:16px 0;text-align:center">ยังไม่มีรายการในกลุ่มนี้</div>`}</div>`,
+      foot: `<button class="btn" type="button" id="copy-log">${icon("copy")}คัดลอก log</button><button class="btn ghost" type="button" id="clear-log">${icon("trash")}ล้าง log</button>`
+    };
+  }
+
+  function go(v) { history.push(view); view = v; confirming = false; deleting = null; render(); }
+  function back() { view = history.pop() || "home"; confirming = false; render(); }
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 2600); }
+
+  function display(row, k) {
+    const e = edits[row.id] && edits[row.id][k];
+    return e !== undefined ? e : row[k];
+  }
+  function match(row, fl) {
+    const val = String(row[fl.f]);
+    if (fl.op === "=") return val === fl.v;
+    if (fl.op === "!=") return val !== fl.v;
+    if (fl.op === "ilike") return val.toLowerCase().includes(fl.v.toLowerCase());
+    const a = FIELDS[fl.f].type === "monetary" ? row[fl.f] : val, b = FIELDS[fl.f].type === "monetary" ? parseFloat(fl.v) : fl.v;
+    return fl.op === ">=" ? a >= b : a <= b;
+  }
+  function domainText() {
+    const parts = query.filters.map(fl => `('${FIELDS[fl.f].tech}', '${fl.op}', ${FIELDS[fl.f].type === "monetary" ? fl.v : `'${fl.v}'`})`);
+    return `[${parts.join(", ")}]`;
+  }
+  function results() {
+    let rows = ORDERS.filter(r => query.filters.every(fl => fl.v === "" || match(r, fl)));
+    if (sortKey) rows = rows.slice().sort((a, b) => (a[sortKey] > b[sortKey] ? 1 : a[sortKey] < b[sortKey] ? -1 : 0) * sortDir);
+    return rows;
+  }
+
+  function cellHtml(row, k) {
+    const v = display(row, k);
+    if (k === "name") return `<td><a href="#" data-open="${row.id}">${esc(v)}</a></td>`;
+    if (k === "state") return `<td><span><span class="state ${row.state}">${STATES[v]}</span></span></td>`;
+    if (k === "amount") return `<td class="num"><span>${money(v)}</span></td>`;
+    if (k === "date") return `<td><span>${thDate(v)}</span></td>`;
+    const canEdit = role === "editor" && EDITABLE.includes(k);
+    const dirty = edits[row.id] && edits[row.id][k] !== undefined;
+    if (canEdit) return `<td class="edit${dirty ? " dirty" : ""}"><input type="text" id="c-${row.id}-${k}" data-row="${row.id}" data-key="${k}" value="${esc(v)}" aria-label="${FIELDS[k].label} ${row.name}"></td>`;
+    return `<td><span>${esc(v)}</span></td>`;
+  }
+
+  const views = {
+    home() {
+      const saved = SAVED.map((s, i) => `<button type="button" data-saved="${i}"><b>${s.title}</b><span>${s.sub}</span></button>`).join("");
+      return {
+        body: `
+        <div class="card ctx">
+          <div class="label">หน้าที่เปิดอยู่</div>
+          <div class="ctx-title">ใบสั่งขาย SO0042 <small>sale.order · id 42</small></div>
+          <div class="meta">เชื่อมกับ: ใบแจ้งหนี้ 2 ใบ · ใบส่งของ 1 ใบ</div>
+          <div class="row">
+            <button class="btn" type="button" data-view="42">${icon("eye")}ดูทุก field</button>
+            <button class="btn primary" type="button" data-go="related">${icon("link")}ดูเอกสารที่เชื่อมกัน</button>
+          </div>
+        </div>
+        <input class="search" id="search" type="text" placeholder="ค้นหาข้อมูล เช่น ใบสั่งขาย, ลูกค้า, สินค้า" aria-label="ค้นหาข้อมูล">
+        <div class="list" id="search-results" hidden></div>
+        <div>
+          <div class="sec-title"><span class="label">Query ที่บันทึกไว้ในเว็บนี้</span><span class="meta">${SAVED.length} รายการ</span></div>
+          <div class="list">${saved}</div>
+        </div>`,
+        foot: `<button class="btn primary" type="button" data-go="builder">${icon("search")}สร้าง query ใหม่</button><button class="btn ghost" type="button" data-go="domain">&lt;/&gt; โหมด dev</button>`
+      };
+    },
+    fields() {
+      const r = ORDERS.find(o => o.id == viewId) || ORDERS[0];
+      const rows = Object.entries(FIELDS).map(([k, f]) => `<div><span>${f.label}<code>${f.tech} · ${f.type}</code></span><span>${k === "state" ? STATES[r[k]] : k === "amount" ? money(r[k]) : k === "date" ? thDate(r[k]) : esc(r[k])}</span></div>`).join("");
+      const extra = [["เงื่อนไขการชำระเงิน","payment_term_id · many2one","30 Days"],["คลังสินค้า","warehouse_id · many2one","คลังหลัก"],["บริษัท","company_id · many2one","บจก. ตัวอย่าง"],["แก้ไขล่าสุด","write_date · datetime","19/11/2026 16:42:10"]]
+        .map(([l,t,v]) => `<div><span>${l}<code>${t}</code></span><span>${v}</span></div>`).join("");
+      const edit = role === "editor" ? `<button class="btn" type="button" data-edit="${r.id}">${icon("pencil")}แก้ไข</button>` : "";
+      return { body: `<div class="ctx-title">${r.name} <small>sale.order · id ${r.id}</small></div><input class="search" type="text" id="f-filter" placeholder="กรอง field..." aria-label="กรอง field"><div class="kvs" id="kvs">${rows}${extra}</div>`, foot: `${edit}<button class="btn" type="button" id="copy-json">${icon("copy")}คัดลอกเป็น JSON</button>` };
+    },
+    form() {
+      const r = formId ? ORDERS.find(o => o.id == formId) : { name: "ใบใหม่", partner: "", date: "2026-11-20", user: "สมชาย ใจดี" };
+      const uniq = k => [...new Set(ORDERS.map(o => o[k]))];
+      const opts = (k, sel) => uniq(k).map(v => `<option${v === sel ? " selected" : ""}>${esc(v)}</option>`).join("");
+      return {
+        body: `
+        <div class="ctx-title">${formId ? `${icon("pencil")} แก้ไข ${r.name}` : `${icon("plus")} สร้างใบสั่งขาย`}</div>
+        <label class="field"><span>ลูกค้า *</span><select id="fm-partner"><option value="">เลือกลูกค้า</option>${opts("partner", r.partner)}</select></label>
+        <label class="field"><span>วันที่สั่ง</span><input type="date" id="fm-date" value="${r.date}"></label>
+        <label class="field"><span>พนักงานขาย</span><select id="fm-user">${opts("user", r.user)}</select></label>
+        <div class="meta" id="fm-err" style="color:var(--danger)" hidden></div>
+        <div class="meta">บันทึกผ่าน <code>sale.order.${formId ? "write" : "create"}()</code> ของ Odoo</div>`,
+        foot: `<button class="btn primary" type="button" id="do-form">${icon("check")}บันทึก</button><button class="btn ghost" type="button" id="cancel-form">${icon("x")}ยกเลิก</button>`
+      };
+    },
+    related() {
+      const chain = `<div class="chain"><span class="me">SO0042</span>→<span>WH/OUT/00087</span>→<span>INV/2026/00118</span><span>INV/2026/00131</span></div>`;
+      const cards = LINKS.map(l => `
+        <div class="card link">
+          <div class="row" style="justify-content:space-between"><span class="pill">${l.kind}</span><span class="meta">${l.status}${l.amount ? ` · ${money(l.amount)}` : ""}</span></div>
+          <div class="ctx-title">${l.ref} <small>${l.model} · id ${l.id}</small></div>
+          <div class="via">
+            <div class="label">เชื่อมกันที่ field</div>
+            <div><code>${l.via[0]}</code> ↔ <code>${l.via[1]}</code></div>
+            <div class="meta">${l.table ? `ตารางกลาง <code>${l.table}</code> · ` : ""}อ้างอิงเพิ่ม <code>${esc(l.extra)}</code></div>
+          </div>
+          <div>
+            <div class="label">เชื่อมกันที่รายการไหน</div>
+            <table class="map"><thead><tr><th>สินค้า</th><th class="num">${l.cols[0]}</th><th class="num">${l.cols[1]}</th></tr></thead>
+              <tbody>${l.lines.map(([p, a, b]) => `<tr><td>${p}</td><td class="num">#${a}</td><td class="num">#${b}</td></tr>`).join("")}</tbody></table>
+          </div>
+          <div class="row">
+            <button class="btn sm" type="button" data-open-ref="${l.ref}">${icon("external")}เปิดใน Odoo</button>
+            <button class="btn sm" type="button" data-copy="${l.ref}">${icon("copy")}เลขที่</button>
+            <button class="btn sm" type="button" data-copy="${esc(l.domain)}">${icon("copy")}domain</button>
+          </div>
+        </div>`).join("");
+      return { body: `<div class="ctx-title">SO0042 เชื่อมกับ ${LINKS.length} เอกสาร</div>${chain}<div class="meta">SO นี้วางบิลแยก 2 ใบ ดูได้ว่าแต่ละใบมาจากรายการไหนของ SO</div>${cards}` };
+    },
+    builder() {
+      const colChips = Object.entries(FIELDS).map(([k, f]) => `<button class="chip" type="button" data-col="${k}" aria-pressed="${query.cols.includes(k)}">${f.label}</button>`).join("");
+      const fOpts = sel => Object.entries(FIELDS).map(([k, f]) => `<option value="${k}"${k === sel ? " selected" : ""}>${f.label}</option>`).join("");
+      const oOpts = sel => Object.entries(OPS).map(([k, l]) => `<option value="${k}"${k === sel ? " selected" : ""}>${l}</option>`).join("");
+      const valInput = (fl, i) => fl.f === "state"
+        ? `<select id="fv-${i}" data-fv="${i}">${Object.entries(STATES).map(([k, l]) => `<option value="${k}"${k === fl.v ? " selected" : ""}>${l}</option>`).join("")}</select>`
+        : `<input type="text" id="fv-${i}" data-fv="${i}" value="${esc(fl.v)}" placeholder="ค่า">`;
+      const filters = query.filters.map((fl, i) => `<div class="filter"><select id="ff-${i}" data-ff="${i}" aria-label="field">${fOpts(fl.f)}</select><select id="fo-${i}" data-fo="${i}" aria-label="เงื่อนไข">${oOpts(fl.op)}</select>${valInput(fl, i)}<button class="x" type="button" data-rmf="${i}" aria-label="ลบเงื่อนไข">×</button></div>`).join("");
+      return {
+        body: `
+        <label class="field"><span>ข้อมูล</span><select id="model"><option>ใบสั่งขาย (sale.order)</option><option>ลูกค้า / ผู้ติดต่อ (res.partner)</option><option>สินค้า (product.product)</option><option>ใบแจ้งหนี้ (account.move)</option><option>การเคลื่อนไหวสต็อก (stock.move)</option></select></label>
+        <div class="field"><span>แสดง field</span><div class="chips">${colChips}</div></div>
+        <div class="field"><span>เงื่อนไข (ต้องตรงทุกข้อ)</span><div style="display:grid;gap:6px">${filters}</div><div><button class="btn ghost" type="button" id="add-filter">+ เพิ่มเงื่อนไข</button></div></div>
+        <label class="field"><span>จัดกลุ่มตาม (ไม่บังคับ)</span><select id="group"><option value="">ไม่จัดกลุ่ม</option><option value="partner"${query.group === "partner" ? " selected" : ""}>ลูกค้า</option><option value="user"${query.group === "user" ? " selected" : ""}>พนักงานขาย</option><option value="state"${query.group === "state" ? " selected" : ""}>สถานะ</option></select></label>
+        <div class="meta">Domain ที่จะส่งไป: <code>${esc(domainText())}</code></div>`,
+        foot: `<button class="btn primary" type="button" id="run">ดูผลลัพธ์</button><button class="btn" type="button" id="save-q">บันทึก query</button>`
+      };
+    },
+    domain() {
+      return {
+        body: `
+        <div class="meta">สำหรับ dev: เขียน domain และเลือก field เอง ใช้ JSON-RPC ของ Odoo ไม่ใช่ SQL</div>
+        <label class="field"><span>Model</span><input type="text" id="d-model" value="sale.order"></label>
+        <label class="field"><span>Domain</span><textarea class="code" id="d-domain">${esc(domainText())}</textarea></label>
+        <label class="field"><span>Fields</span><input type="text" id="d-fields" value="${query.cols.map(k => FIELDS[k].tech).join(", ")}"></label>
+        <div class="field"><span>Field ที่ใช้ได้ (คลิกเพื่อแทรก)</span><div class="chips">${Object.values(FIELDS).map(f => `<button class="chip" type="button" data-ins="${f.tech}">${f.tech}</button>`).join("")}<button class="chip" type="button" data-ins="partner_id.country_id.name">partner_id.country_id.name</button></div></div>
+        <div class="field"><span>Method</span><div class="chips"><button class="chip" type="button" aria-pressed="true">search_read</button><button class="chip" type="button">read_group</button><button class="chip" type="button">search_count</button></div></div>`,
+        foot: `<button class="btn primary" type="button" id="run">รัน</button><span class="meta">limit 1,000 · timeout 30 วินาที</span>`
+      };
+    },
+    password() {
+      return {
+        body: `
+        <div class="ctx-title">เปลี่ยนรหัสผ่าน</div>
+        <div class="card ctx"><div class="kvs" style="border:0">
+          <div><span class="meta">Database</span><span><code style="font-family:var(--f-mono)">${db.name}</code></span></div>
+          <div style="border:0"><span class="meta">User</span><span>${esc(db.user)}</span></div></div></div>
+        <input type="text" id="p-user" value="${esc(db.user)}" autocomplete="username" hidden>
+        <label class="field"><span>รหัสผ่านปัจจุบัน</span><input type="password" id="p-old" autocomplete="current-password"></label>
+        <label class="field"><span>รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)</span><input type="password" id="p-new" autocomplete="new-password"></label>
+        <label class="field"><span>ยืนยันรหัสผ่านใหม่</span><input type="password" id="p-confirm" autocomplete="new-password"></label>
+        <label class="row meta"><input type="checkbox" id="p-show"> แสดงรหัสผ่าน</label>
+        <div class="meta" id="p-err" style="color:var(--danger)" hidden></div>
+        <div class="meta">เปลี่ยนเฉพาะ user นี้ใน DB <b>${db.name}</b> ผ่าน <code>res.users.change_password</code> ของ Odoo · extension ไม่เก็บรหัสผ่าน</div>`,
+        foot: `<button class="btn primary" type="button" id="do-pass">บันทึกรหัสผ่านใหม่</button><button class="btn ghost" type="button" id="cancel-pass">ยกเลิก</button>`
+      };
+    },
+    results() {
+      const rows = results();
+      let table;
+      if (query.group) {
+        const g = {};
+        rows.forEach(r => { const key = query.group === "state" ? STATES[r.state] : r[query.group]; (g[key] = g[key] || { n: 0, sum: 0 }); g[key].n++; g[key].sum += r.amount; });
+        const body = Object.entries(g).sort((a, b) => b[1].sum - a[1].sum).map(([k, v]) => `<tr><td><span>${esc(k)}</span></td><td class="num"><span>${v.n}</span></td><td class="num"><span>${money(v.sum)}</span></td></tr>`).join("");
+        table = `<table class="grid"><thead><tr><th>${FIELDS[query.group].label}</th><th class="num">จำนวน</th><th class="num">ยอดรวม</th></tr></thead><tbody>${body}</tbody></table>`;
+      } else {
+        const head = query.cols.map(k => `<th data-sort="${k}"${k === "amount" ? ' class="num"' : ""}>${FIELDS[k].label}${sortKey === k ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("");
+        const acts = r => `<td class="act"><button class="ibtn" type="button" data-view="${r.id}" title="ดูรายละเอียด" aria-label="ดู ${r.name}">${icon("eye")}</button>${role === "editor"
+          ? `<button class="ibtn" type="button" data-edit="${r.id}" title="แก้ไข" aria-label="แก้ไข ${r.name}">${icon("pencil")}</button><button class="ibtn danger" type="button" data-del="${r.id}" title="ลบ" aria-label="ลบ ${r.name}">${icon("trash")}</button>` : ""}</td>`;
+        const body = rows.map(r => `<tr>${query.cols.map(k => cellHtml(r, k)).join("")}${acts(r)}</tr>`).join("");
+        table = `<table class="grid"><thead><tr>${head}<th class="act">จัดการ</th></tr></thead><tbody>${body}</tbody></table>`;
+      }
+      const changes = Object.entries(edits).flatMap(([id, f]) => Object.entries(f).map(([k, v]) => ({ row: ORDERS.find(o => o.id == id), k, v })));
+      const total = rows.reduce((s, r) => s + r.amount, 0);
+      const hint = !query.group && role === "editor" ? `<div class="meta">แก้ไขด่วนได้ที่ cell พนักงานขาย / สถานะจัดส่ง หรือใช้ไอคอนในคอลัมน์จัดการ (เลื่อนขวา)</div>` : !query.group ? `<div class="meta">สิทธิ์ Viewer ดูได้อย่างเดียว</div>` : "";
+      const dr = deleting && ORDERS.find(o => o.id == deleting);
+      const del = !dr ? "" : DELETABLE.includes(dr.state)
+        ? `<div class="delbar"><b>ลบ ${dr.name} ถาวร?</b><div class="meta">${esc(dr.partner)} · ${money(dr.amount)} บาท · ย้อนกลับไม่ได้ · เรียก <code>sale.order.unlink()</code></div><div class="row"><button class="btn danger" type="button" id="do-del">${icon("trash")}ลบ</button><button class="btn" type="button" id="cancel-del">${icon("x")}ยกเลิก</button></div></div>`
+        : `<div class="delbar"><b>ลบ ${dr.name} ไม่ได้</b><div class="meta">Odoo ไม่ให้ลบใบสั่งขายที่${STATES[dr.state]} ต้องยกเลิกใบก่อน จึงจะลบได้</div><div class="row"><button class="btn" type="button" id="cancel-del">ตกลง</button></div></div>`;
+      let save = "";
+      if (changes.length) {
+        const nRows = Object.keys(edits).length;
+        save = confirming
+          ? `<div class="savebar"><b>ยืนยันการแก้ไข ${nRows} แถว ใน Production</b><div class="diff">${changes.map(c => `<div>${c.row.name} · ${FIELDS[c.k].tech}: <del>${esc(c.row[c.k])}</del> → <ins>${esc(c.v)}</ins></div>`).join("")}</div><div class="meta">ระบบจะเรียก sale.order.write() ทีละ record ประวัติจะขึ้นใน chatter</div><div class="row"><button class="btn hl" type="button" id="do-save">ยืนยันบันทึก</button><button class="btn" type="button" id="cancel-save">กลับไปแก้</button></div></div>`
+          : `<div class="savebar"><div class="row" style="justify-content:space-between"><span>มีการแก้ไข ${changes.length} ช่อง ยังไม่ได้บันทึก</span><span class="row"><button class="btn" type="button" id="discard">ยกเลิก</button><button class="btn primary" type="button" id="ask-save">บันทึก…</button></span></div></div>`;
+      }
+      return {
+        body: `<div class="toolbar"><b>ใบสั่งขาย</b><span class="sp"></span>${role === "editor" && !query.group ? `<button class="btn sm primary" type="button" id="new-rec">${icon("plus")}สร้าง</button>` : ""}<button class="ibtn" type="button" id="refresh" title="โหลดใหม่" aria-label="โหลดใหม่">${icon("refresh")}</button><button class="ibtn" type="button" data-go="builder" title="กรอง / แก้เงื่อนไข" aria-label="กรอง">${icon("filter")}</button></div><div class="meta">${rows.length} แถว · ${money(total)} บาท · 38 ms</div>${hint}<div class="tbl-wrap">${table}</div>${del}${save}`,
+        foot: `<button class="btn" type="button" id="export">${icon("download")}Excel</button><button class="btn" type="button" id="export-csv">${icon("download")}CSV</button>`
+      };
+    }
+  };
+
+  function render() {
+    const v = tab === "log" ? logView() : views[view]();
+    $("body").innerHTML = v.body;
+    $("foot").innerHTML = v.foot || "";
+    $("foot").hidden = !v.foot;
+    $("btn-back").hidden = tab === "log" || view === "home";
+    $("tab-data").setAttribute("aria-selected", String(tab === "data"));
+    $("tab-log").setAttribute("aria-selected", String(tab === "log"));
+    $("log-count").textContent = logs.length;
+    $("log-count").classList.toggle("new", unseen > 0);
+    $("role-pill").textContent = role === "editor" ? "Editor" : "Viewer";
+    $("db-name").textContent = db.name;
+    $("db-tag").textContent = db.label.toUpperCase();
+    $("db-user").textContent = db.user;
+    $("db-bar").classList.toggle("staging", db.env === "staging");
+    $("btn-pass").hidden = view === "password";
+  }
+
+  function doChangePass() {
+    const oldP = $("p-old").value, newP = $("p-new").value, conf = $("p-confirm").value, err = $("p-err");
+    const fail = !oldP || !newP || !conf ? "กรอกให้ครบทั้ง 3 ช่อง"
+      : newP.length < 8 ? "รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัว"
+      : newP === oldP ? "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม"
+      : newP !== conf ? "รหัสผ่านใหม่กับช่องยืนยันไม่ตรงกัน" : "";
+    if (fail) { err.textContent = fail; err.hidden = false; return; }
+    addLog({ kind: "action", text: `เปลี่ยนรหัสผ่านของ ${db.user} ใน DB ${db.name}`, call: "res.users.change_password(old_passwd='••••••', new_passwd='••••••')" });
+    history = []; view = "home"; render();
+    toast(`เปลี่ยนรหัสผ่านของ ${db.user} ใน ${db.name} แล้ว`);
+  }
+
+  function saveForm() {
+    const partner = $("fm-partner").value, err = $("fm-err");
+    if (!partner) { err.textContent = "เลือกลูกค้าก่อนบันทึก"; err.hidden = false; return; }
+    const vals = { partner, date: $("fm-date").value, user: $("fm-user").value };
+    let name;
+    if (formId) {
+      const r = ORDERS.find(o => o.id == formId);
+      const changed = Object.keys(vals).filter(k => vals[k] !== r[k]);
+      addLog({ kind: "write", text: changed.length ? `แก้ไข ${r.name} (${changed.length} field)` : `บันทึก ${r.name} (ไม่มีการเปลี่ยนแปลง)`,
+        changes: changed.length ? changed.map(k => [FIELDS[k].label, r[k], vals[k]]) : null,
+        call: `sale.order.write([${r.id}], {${changed.map(k => `'${FIELDS[k].tech}': '${vals[k]}'`).join(", ")}})` });
+      Object.assign(r, vals); name = r.name;
+    } else {
+      const id = Math.max(...ORDERS.map(o => o.id)) + 1;
+      name = `SO${String(id).padStart(4, "0")}`;
+      ORDERS.unshift({ id, name, state: "draft", amount: 0, delivery: "-", ...vals });
+      addLog({ kind: "create", text: `สร้างใบสั่งขาย ${name} ให้ ${vals.partner}`, call: `sale.order.create({'partner_id': '${vals.partner}', 'date_order': '${vals.date}', 'user_id': '${vals.user}'})` });
+    }
+    const created = !formId;
+    back();
+    toast(created ? `สร้าง ${name} แล้ว` : `บันทึก ${name} แล้ว`);
+  }
+
+  function copy(text) {
+    navigator.clipboard.writeText(text).then(() => toast(`คัดลอกแล้ว: ${text}`), () => toast("คัดลอกไม่ได้ ลองเลือกข้อความแล้วกด Ctrl+C"));
+  }
+
+  $("body").addEventListener("click", e => {
+    const t = e.target.closest("button, a, th");
+    if (!t) return;
+    if (t.dataset.go) return go(t.dataset.go);
+    if (t.dataset.logf) { logFilter = t.dataset.logf; return render(); }
+    if (t.dataset.saved) { query = JSON.parse(JSON.stringify(SAVED[t.dataset.saved].q)); return runQuery(); }
+    if (t.dataset.col) { const k = t.dataset.col; query.cols = query.cols.includes(k) ? query.cols.filter(c => c !== k) : Object.keys(FIELDS).filter(c => c === k || query.cols.includes(c)); return render(); }
+    if (t.dataset.rmf) { query.filters.splice(+t.dataset.rmf, 1); return render(); }
+    if (t.id === "add-filter") { query.filters.push({ f: "partner", op: "ilike", v: "" }); return render(); }
+    if (t.dataset.sort) { sortDir = sortKey === t.dataset.sort ? -sortDir : 1; sortKey = t.dataset.sort; return render(); }
+    if (t.dataset.open) { e.preventDefault(); return toast(`เปิด ${ORDERS.find(o => o.id == t.dataset.open).name} ในแท็บ Odoo (mockup)`); }
+    if (t.dataset.ins) { const ta = $("d-domain"); ta.value = ta.value.replace(/\]\s*$/, `${ta.value.trim() === "[]" ? "" : ", "}('${t.dataset.ins}', '=', '')]`); return ta.focus(); }
+    if (t.dataset.view) {
+      viewId = +t.dataset.view;
+      addLog({ kind: "read", text: `ดูทุก field ของ ${ORDERS.find(o => o.id == viewId).name}`, call: `sale.order.read([${viewId}])` });
+      return go("fields");
+    }
+    if (t.dataset.edit) { formId = +t.dataset.edit; return go("form"); }
+    if (t.dataset.del) { deleting = +t.dataset.del; confirming = false; return render(); }
+    if (t.id === "new-rec") { formId = null; return go("form"); }
+    if (t.id === "cancel-del") { deleting = null; return render(); }
+    if (t.id === "do-del") {
+      const i = ORDERS.findIndex(o => o.id == deleting), name = ORDERS[i].name;
+      addLog({ kind: "delete", text: `ลบใบสั่งขาย ${name} (${ORDERS[i].partner})`, call: `sale.order.unlink([${deleting}])` });
+      ORDERS.splice(i, 1); delete edits[deleting]; deleting = null; render(); return toast(`ลบ ${name} แล้ว`);
+    }
+    if (t.id === "refresh") return toast("โหลดข้อมูลใหม่แล้ว");
+    if (t.dataset.copy) return copy(t.dataset.copy);
+    if (t.dataset.openRef) return toast(`เปิด ${t.dataset.openRef} ในแท็บใหม่ (mockup)`);
+    if (t.id === "ask-save") { confirming = true; return render(); }
+    if (t.id === "cancel-save") { confirming = false; return render(); }
+    if (t.id === "discard") { edits = {}; return render(); }
+    if (t.id === "do-save") {
+      const n = Object.keys(edits).length;
+      Object.entries(edits).forEach(([id, f]) => {
+        const row = ORDERS.find(o => o.id == id);
+        addLog({ kind: "write", text: `แก้ไข ${row.name} (${Object.keys(f).length} field)`,
+          changes: Object.entries(f).map(([k, v]) => [FIELDS[k].label, row[k], v]),
+          call: `sale.order.write([${id}], {${Object.entries(f).map(([k, v]) => `'${FIELDS[k].tech}': '${v}'`).join(", ")}})` });
+        Object.assign(row, f);
+      });
+      edits = {}; confirming = false; render(); return toast(`บันทึกแล้ว ${n} แถว`);
+    }
+    if (t.dataset.searchHit) { query = { cols: ["name","partner","date","amount","state"], filters: [], group: "" }; return t.dataset.searchHit === "sale" ? runQuery() : go("builder"); }
+  });
+  $("body").addEventListener("change", e => {
+    const t = e.target;
+    if (t.dataset.ff) { const fl = query.filters[+t.dataset.ff]; fl.f = t.value; fl.v = t.value === "state" ? "sale" : ""; return render(); }
+    if (t.dataset.fo) { query.filters[+t.dataset.fo].op = t.value; return render(); }
+    if (t.dataset.fv) { query.filters[+t.dataset.fv].v = t.value; return render(); }
+    if (t.id === "group") { query.group = t.value; return render(); }
+    if (t.id === "p-show") { ["p-old", "p-new", "p-confirm"].forEach(id => $(id).type = t.checked ? "text" : "password"); return; }
+    if (t.dataset.row) {
+      const row = ORDERS.find(o => o.id == t.dataset.row), k = t.dataset.key;
+      edits[row.id] = edits[row.id] || {};
+      if (t.value === row[k]) delete edits[row.id][k]; else edits[row.id][k] = t.value;
+      if (!Object.keys(edits[row.id]).length) delete edits[row.id];
+      return render();
+    }
+  });
+  $("body").addEventListener("input", e => {
+    const t = e.target;
+    if (t.id === "search") {
+      const box = $("search-results"), q = t.value.trim();
+      const hits = [["sale","ใบสั่งขาย","sale.order · 1,284 รายการ"],["partner","ลูกค้า / ผู้ติดต่อ","res.partner · 532 รายการ"],["product","สินค้า","product.product · 2,210 รายการ"],["move","ใบแจ้งหนี้","account.move · 3,906 รายการ"]]
+        .filter(h => q && (h[1].includes(q) || h[2].includes(q.toLowerCase())));
+      box.hidden = !q;
+      box.innerHTML = hits.length ? hits.map(h => `<button type="button" data-search-hit="${h[0]}"><b>${h[1]}</b><span>${h[2]}</span></button>`).join("") : `<span class="meta" style="padding:8px">ไม่พบข้อมูลที่ชื่อ "${esc(q)}"</span>`;
+    }
+    if (t.id === "f-filter") {
+      const q = t.value.toLowerCase();
+      document.querySelectorAll("#kvs > div").forEach(d => d.hidden = q && !d.textContent.toLowerCase().includes(q));
+    }
+  });
+  $("foot").addEventListener("click", e => {
+    const t = e.target.closest("button");
+    if (!t) return;
+    if (t.dataset.go) return go(t.dataset.go);
+    if (t.id === "run") return runQuery();
+    if (t.id === "clear-log") { logs = []; unseen = 0; render(); return toast("ล้าง log แล้ว"); }
+    if (t.id === "copy-log") {
+      const text = logs.map(l => `${dmy(l.at)} [${KIND[l.kind]}] ${l.text}${l.changes ? " | " + l.changes.map(([f, a, b]) => `${f}: ${a} -> ${b}`).join(", ") : ""} (${l.src})`).join("\n");
+      navigator.clipboard.writeText(text).then(() => toast(`คัดลอก log ${logs.length} รายการแล้ว`), () => toast("คัดลอกไม่ได้ ลองใหม่อีกครั้ง"));
+      return;
+    }
+    if (t.dataset.edit) { formId = +t.dataset.edit; return go("form"); }
+    if (t.id === "do-form") return saveForm();
+    if (t.id === "cancel-form") return back();
+    if (t.id === "do-pass") return doChangePass();
+    if (t.id === "cancel-pass") return back();
+    if (t.id === "save-q") return toast("บันทึก query ในเว็บนี้แล้ว (mockup)");
+    if (t.id === "export" || t.id === "export-csv") {
+      const ext = t.id === "export" ? "xlsx" : "csv";
+      addLog({ kind: "read", text: `Export ใบสั่งขาย ${results().length} แถว เป็นไฟล์ ${ext.toUpperCase()}`, call: `sale.order.search_read(${domainText()}) → ใบสั่งขาย_20-11-2026.${ext}` });
+      render();
+      return toast(`ดาวน์โหลด ใบสั่งขาย_20-11-2026.${ext} (mockup)`);
+    }
+    if (t.id === "copy-json") return toast("คัดลอก SO0042 เป็น JSON แล้ว (mockup)");
+  });
+
+  $("btn-back").addEventListener("click", back);
+  $("btn-pass").addEventListener("click", () => { tab = "data"; go("password"); });
+  [["tab-data", "data"], ["tab-log", "log"]].forEach(([id, t]) => $(id).addEventListener("click", () => {
+    tab = t;
+    if (t === "log") unseen = 0;
+    render();
+  }));
+  $("reload").addEventListener("click", () => {
+    pageLoad(); history = []; view = "home"; edits = {}; deleting = null; confirming = false;
+    render(); toast("Reload หน้าเว็บแล้ว · ล้าง log เก่า");
+  });
+  const ODOO_ACTIONS = {
+    invoice: [
+      { kind: "action", src: "Odoo", text: "กดปุ่ม Create Invoice ใน SO0042", call: "ir.actions.act_window: sale.action_view_sale_advance_payment_inv" },
+      { kind: "create", src: "Odoo", text: "สร้างใบแจ้งหนี้ INV/2026/00140 (ร่าง) จาก SO0042 · 29,767.40 บาท", call: "sale.advance.payment.inv.create_invoices([5])" }
+    ],
+    email: [
+      { kind: "action", src: "Odoo", text: "กดปุ่ม Send by Email ใน SO0042", call: "sale.order.action_quotation_send([42])" },
+      { kind: "read", src: "Odoo", text: "โหลดแม่แบบอีเมล \"Sales: Send Quotation\"", call: "mail.compose.message.onchange(template_id=12)" }
+    ],
+    cancel: [
+      { kind: "action", src: "Odoo", text: "กดปุ่ม Cancel ใน SO0042", call: "sale.order.action_cancel([42])" },
+      { kind: "error", src: "Odoo", text: "ยกเลิก SO0042 ไม่สำเร็จ: Odoo แจ้งว่ามีใบส่งของที่ส่งแล้ว ต้องทำรับคืนก่อน", call: "UserError ← sale.order.action_cancel([42])" }
+    ]
+  };
+  $("odoo-btns").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    ODOO_ACTIONS[b.dataset.odoo].forEach(addLog);
+    render();
+    if (tab !== "log") toast("บันทึกลง Log ของหน้านี้แล้ว");
+  });
+  $("body").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id === "p-confirm") doChangePass(); });
+  $("toggle-panel").addEventListener("click", () => {
+    const closed = $("stage").classList.toggle("closed");
+    $("toggle-panel").setAttribute("aria-pressed", String(!closed));
+  });
+  [["role-viewer", "viewer"], ["role-editor", "editor"]].forEach(([id, r]) => $(id).addEventListener("click", () => {
+    role = r; edits = {}; confirming = false; deleting = null;
+    if (r === "viewer" && view === "form") view = history.pop() || "home";
+    $("role-viewer").setAttribute("aria-pressed", String(r === "viewer"));
+    $("role-editor").setAttribute("aria-pressed", String(r === "editor"));
+    render();
+  }));
+
+  pageLoad();
+  render();
+})();
+</script>
