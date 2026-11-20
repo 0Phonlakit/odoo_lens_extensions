@@ -1,0 +1,10 @@
+{
+  "name": "odoo-lens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Small Chrome extension to browse, edit and trace Odoo data through the Odoo ORM.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
