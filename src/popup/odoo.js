@@ -58,7 +58,7 @@ export async function connect(tabId) {
   async function fields(model) {
     if (!metaCache.has(model)) {
       metaCache.set(model, await call(model, "fields_get", [], {
-        attributes: ["string", "type", "relation", "selection", "store", "readonly", "required"]
+        attributes: ["string", "type", "relation", "relation_field", "selection", "store", "readonly", "required"]
       }));
     }
     return metaCache.get(model);
