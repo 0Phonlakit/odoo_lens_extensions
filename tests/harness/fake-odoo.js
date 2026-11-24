@@ -10,7 +10,7 @@
       amount_total: { string: "Total", type: "monetary", store: true, readonly: true },
       user_id: { string: "Salesperson", type: "many2one", relation: "res.users", store: true },
       client_order_ref: { string: "Customer Reference", type: "char", store: true },
-      order_line: { string: "Order Lines", type: "one2many", relation: "sale.order.line", store: true },
+      order_line: { string: "Order Lines", type: "one2many", relation: "sale.order.line", relation_field: "order_id", store: true },
       invoice_ids: { string: "Invoices", type: "many2many", relation: "account.move", store: false, readonly: true },
       display_name: { string: "Display Name", type: "char", store: false, readonly: true }
     },
@@ -20,14 +20,36 @@
       amount_total: { string: "Total", type: "monetary", store: true },
       move_type: { string: "Type", type: "selection", store: true, selection: [["out_invoice", "Customer Invoice"], ["out_refund", "Customer Credit Note"]] },
       invoice_origin: { string: "Origin", type: "char", store: true },
-      invoice_line_ids: { string: "Invoice lines", type: "one2many", relation: "account.move.line", store: true },
+      invoice_line_ids: { string: "Invoice lines", type: "one2many", relation: "account.move.line", relation_field: "move_id", store: true },
+      line_ids: { string: "Journal Items", type: "one2many", relation: "account.move.line", relation_field: "move_id", store: true },
       display_name: { string: "Display Name", type: "char", store: false }
     },
     "stock.picking": {
       name: { string: "Reference", type: "char", store: true },
       state: { string: "Status", type: "selection", store: true, selection: [["assigned", "Ready"], ["done", "Done"]] },
       origin: { string: "Source Document", type: "char", store: true },
+      move_ids: { string: "Stock moves", type: "one2many", relation: "stock.move", relation_field: "picking_id", store: true },
       display_name: { string: "Display Name", type: "char", store: false }
+    },
+    "sale.order.line": {
+      name: { string: "Description", type: "char", store: true },
+      product_id: { string: "Product", type: "many2one", relation: "product.product", store: true },
+      order_id: { string: "Order", type: "many2one", relation: "sale.order", store: true },
+      tax_id: { string: "Taxes", type: "many2many", relation: "account.tax", relation_table: "account_tax_sale_order_line_rel", store: true },
+      invoice_lines: { string: "Invoice Lines", type: "many2many", relation: "account.move.line", relation_table: "sale_order_line_invoice_rel", store: true },
+      move_ids: { string: "Stock Moves", type: "one2many", relation: "stock.move", relation_field: "sale_line_id", store: true }
+    },
+    "account.move.line": {
+      name: { string: "Label", type: "char", store: true },
+      product_id: { string: "Product", type: "many2one", relation: "product.product", store: true },
+      move_id: { string: "Journal Entry", type: "many2one", relation: "account.move", store: true },
+      account_id: { string: "Account", type: "many2one", relation: "account.account", store: true },
+      sale_line_ids: { string: "Sales Order Lines", type: "many2many", relation: "sale.order.line", relation_table: "sale_order_line_invoice_rel", store: true }
+    },
+    "stock.move": {
+      product_id: { string: "Product", type: "many2one", relation: "product.product", store: true },
+      picking_id: { string: "Transfer", type: "many2one", relation: "stock.picking", store: true },
+      sale_line_id: { string: "Sale Line", type: "many2one", relation: "sale.order.line", store: true }
     },
     "res.partner": {
       name: { string: "Name", type: "char", store: true, required: true },
@@ -46,9 +68,9 @@
       { id: 39, name: "SO0039", partner_id: 9, date_order: "2026-11-08 08:15:00", state: "sale", amount_total: 112300, user_id: 3, client_order_ref: "ISN-12", order_line: [] }
     ],
     "sale.order.line": [
-      { id: 101, name: "PVC pipe 4in", product_id: [1, "PVC pipe 4in"], invoice_lines: [5501], order_id: 42 },
-      { id: 102, name: "Tee joint 4in", product_id: [2, "Tee joint 4in"], invoice_lines: [5502], order_id: 42 },
-      { id: 103, name: "Pipe glue 1kg", product_id: [3, "Pipe glue 1kg"], invoice_lines: [5630], order_id: 42 }
+      { id: 101, name: "PVC pipe 4in", product_id: [1, "PVC pipe 4in"], invoice_lines: [5501], move_ids: [9120], tax_id: [1], order_id: 42 },
+      { id: 102, name: "Tee joint 4in", product_id: [2, "Tee joint 4in"], invoice_lines: [5502], move_ids: [9121], tax_id: [1], order_id: 42 },
+      { id: 103, name: "Pipe glue 1kg", product_id: [3, "Pipe glue 1kg"], invoice_lines: [5630], move_ids: [9122], tax_id: [1], order_id: 42 }
     ],
     "account.move.line": [
       { id: 5501, name: "PVC pipe 4in", product_id: [1, "PVC pipe 4in"], move_id: 118, sale_line_ids: [101] },
@@ -56,15 +78,15 @@
       { id: 5630, name: "Pipe glue 1kg", product_id: [3, "Pipe glue 1kg"], move_id: 131, sale_line_ids: [103] }
     ],
     "account.move": [
-      { id: 118, name: "INV/2026/00118", state: "posted", amount_total: 26450.4, move_type: "out_invoice", invoice_origin: "SO0042", invoice_line_ids: [5501, 5502] },
-      { id: 131, name: "INV/2026/00131", state: "draft", amount_total: 3317, move_type: "out_invoice", invoice_origin: "SO0042", invoice_line_ids: [5630] }
+      { id: 118, name: "INV/2026/00118", state: "posted", amount_total: 26450.4, move_type: "out_invoice", invoice_origin: "SO0042", invoice_line_ids: [5501, 5502], line_ids: [5501, 5502] },
+      { id: 131, name: "INV/2026/00131", state: "draft", amount_total: 3317, move_type: "out_invoice", invoice_origin: "SO0042", invoice_line_ids: [5630], line_ids: [5630] }
     ],
     "stock.move": [
       { id: 9120, picking_id: 87, sale_line_id: 101 },
       { id: 9121, picking_id: 87, sale_line_id: 102 },
       { id: 9122, picking_id: 87, sale_line_id: 103 }
     ],
-    "stock.picking": [{ id: 87, name: "WH/OUT/00087", state: "done", origin: "SO0042" }],
+    "stock.picking": [{ id: 87, name: "WH/OUT/00087", state: "done", origin: "SO0042", move_ids: [9120, 9121, 9122] }],
     "ir.model": [
       { id: 1, name: "Sales Order", model: "sale.order", transient: false },
       { id: 2, name: "Journal Entry", model: "account.move", transient: false },
@@ -75,6 +97,9 @@
     "res.partner": Object.entries(P).map(([id, name]) => ({ id: Number(id), name, email: false })),
     "res.users": Object.entries(U).map(([id, name]) => ({ id: Number(id), name }))
   };
+  DB["ir.model.fields"] = Object.entries(FIELDS).flatMap(([model, fs]) => Object.entries(fs).map(([name, f]) => ({
+    model, name, ttype: f.type, relation: f.relation || false, relation_field: f.relation_field || false, relation_table: f.relation_table || false
+  }))).map((f, i) => ({ id: i + 1, ...f }));
   let nextId = 1000;
 
   const NAMES = { "res.partner": P, "res.users": U, "sale.order": null, "account.move": null, "stock.picking": null };

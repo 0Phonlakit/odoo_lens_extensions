@@ -23,7 +23,7 @@ or publish it unlisted on the Chrome Web Store.
 |---|---|
 | DB bar | Current database, environment tag (Production / Staging / Local, guessed from the DB and host name), host and login |
 | Current page | Detects the record you are on, shows every field (label, technical name, type, value) |
-| Linked documents | For a sale order: each invoice and delivery, the fields that link them (`sale.order.line.invoice_lines` ↔ `account.move.line.sale_line_ids`, `stock.move.sale_line_id`) and which lines are paired. For an invoice: the sale orders it came from. For any record: every relational field and where it points |
+| Linked documents | For any document with lines (sale/purchase orders, invoices, transfers, manufacturing orders, custom models): every other document whose lines link to its lines, the field pair that links them (e.g. `sale.order.line.invoice_lines` ↔ `account.move.line.sale_line_ids`), the join table, which lines are paired, and a domain to find those documents. Paths come from Odoo's own `ir.model.fields`, so nothing is hard-coded per module. Every relational field of the record is listed too |
 | Query builder | Pick a model, columns, filters and an optional group-by with sums; save queries per database |
 | Dev mode | Type a Python-style domain and field list, run `search_read` |
 | CRUD | Create, view, edit (form or inline cells) and delete, each through `create` / `read` / `write` / `unlink`. Edits and deletes ask for confirmation first; Odoo's own errors are shown as-is |
@@ -67,4 +67,5 @@ Then open <http://127.0.0.1:8765/tests/harness/index.html>
 
 - Inline cell editing covers text, number, date, selection and boolean fields; many-to-one fields are edited in the form.
 - Calls use the user's default company context; switching companies in Odoo's company switcher is not passed through.
-- The linked-documents view has dedicated mapping for sale orders and customer invoices; other models show their relational fields.
+- Linked documents follow links between lines (up to 200 lines per list). A target counts as a document when its model has a `state` field; links made only at header level (e.g. `stock.picking.sale_id`) show in the relational field list of the record that holds the field, not as a reverse link.
+- Finding line links reads `ir.model.fields`, which internal users can read in standard Odoo; if a database restricts it, the view says so and still lists the record's relational fields.

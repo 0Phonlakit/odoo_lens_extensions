@@ -3,13 +3,15 @@ import { detectEnv } from "../lib/env.js";
 import { buildDomain, parseDomain, formatDomain, formatValue, parseInput, localDateTime, EDITABLE_TYPES } from "../lib/values.js";
 import { toCsv } from "../lib/csv.js";
 import { describe, noteChange } from "../lib/logtext.js";
-import { groupByParent } from "../lib/links.js";
+import { groupLinks, resolveParent } from "../lib/links.js";
 import { connect, inPage } from "./odoo.js";
 
 const PAGE_SIZE = 80;
 const EXPORT_LIMIT = 2000;
 const LOG_POLL_MS = 2000;
 const ID_LIMIT = 500;
+const LINE_LIMIT = 200;
+const ORIGIN_FIELDS = ["origin", "invoice_origin"];
 const ENV_LABEL = { prod: "PRODUCTION", staging: "STAGING", local: "LOCAL" };
 const KIND_LABEL = { read: "อ่าน", write: "แก้ไข", create: "สร้าง", delete: "ลบ", action: "กดปุ่ม", error: "ผิดพลาด" };
 const LOG_FILTERS = {
@@ -288,7 +290,7 @@ const VIEWS = {
 
   links: {
     load: loadLinks,
-    html({ model, id }, { ref, cards, generic }) {
+    html({ model, id }, { ref, cards, generic, linkError }) {
       const chain = `<div class="chain"><span class="me">${esc(ref)}</span>${cards.length ? "→" : ""}${cards.map(c => `<span>${esc(c.ref)}</span>`).join("")}</div>`;
       const cardHtml = cards.map(c => `
         <div class="card">
@@ -297,6 +299,7 @@ const VIEWS = {
           <div class="via">
             <div class="label">เชื่อมกันที่ field</div>
             <div><code>${esc(c.via[0])}</code> ↔ <code>${esc(c.via[1])}</code></div>
+            <div class="muted">รายการอยู่ในใบนี้ผ่าน <code>${esc(c.parentField)}</code></div>
             ${c.table || c.extra ? `<div class="muted">${c.table ? `ตารางกลาง <code>${esc(c.table)}</code> ` : ""}${c.extra ? `อ้างอิงเพิ่ม <code>${esc(c.extra)}</code>` : ""}</div>` : ""}
           </div>
           <div>
@@ -316,6 +319,7 @@ const VIEWS = {
         </button>`).join("");
       return {
         body: `<div class="title">${esc(ref)} เชื่อมกับ ${cards.length} เอกสาร <small>${esc(model)} · id ${id}</small></div>
+          ${linkError ? `<div class="card"><b>หาเอกสารที่เชื่อมผ่านรายการไม่สำเร็จ</b><span class="err">${esc(linkError)}</span></div>` : ""}
           ${cards.length ? chain : ""}${cardHtml}
           <div><div class="label">ทุก field ที่ผูกกับข้อมูลอื่น (${generic.length})</div>
           <input type="text" data-input="filterRows" data-target="rel-list" placeholder="กรอง…" aria-label="กรอง field ที่ผูกกัน">
@@ -569,74 +573,114 @@ async function loadLinks({ model, id }) {
     })
     .sort((a, b) => a.label.localeCompare(b.label));
   let cards = [];
-  if (model === "sale.order") cards = await saleOrderLinks(id).catch(() => []);
-  else if (model === "account.move") cards = await invoiceLinks(id).catch(() => []);
-  return { ref: rec.display_name, cards, generic };
+  let linkError = "";
+  try {
+    cards = await documentLinks(model, id, rec, meta);
+  } catch (e) {
+    linkError = e.message;
+  }
+  return { ref: rec.display_name, cards, generic, linkError };
 }
 
-async function saleOrderLinks(id) {
-  const so = await readOne("sale.order", id, ["name", "order_line"]);
-  const lines = await call("sale.order.line", "read", [so.order_line, ["name", "product_id", "invoice_lines"]]);
-  const product = l => (l.product_id ? l.product_id[1] : l.name);
-  const cards = [];
+/**
+ * Find documents linked to this one through their lines, for any model.
+ * Walks: this document's line lists (one2many) -> each line field pointing to another model's line
+ * -> the document that line belongs to (a one2many on a model that has a "state" field).
+ */
+async function documentLinks(model, id, rec, meta) {
+  const lineFields = Object.entries(meta).filter(([f, m]) => m.type === "one2many" && !NOISY_LINK.test(f) && rec[f]?.length);
+  if (!lineFields.length) return [];
+  const lineModels = [...new Set(lineFields.map(([, m]) => m.relation))];
+  const FIELD_INFO = ["model", "name", "ttype", "relation", "relation_field", "relation_table"];
+  const lineRel = await call("ir.model.fields", "search_read", [[["model", "in", lineModels], ["ttype", "in", [...RELATIONAL]]], FIELD_INFO]);
+  const links = lineRel.filter(f => f.relation !== model && f.relation !== f.model && !NOISY_LINK.test(f.name) && !SYSTEM_FIELDS.has(f.name));
+  const targets = [...new Set(links.map(f => f.relation))];
+  if (!targets.length) return [];
 
-  const amlIds = lines.flatMap(l => l.invoice_lines);
-  if (amlIds.length) {
-    const amls = new Map((await call("account.move.line", "read", [amlIds, ["move_id"]])).map(a => [a.id, a.move_id[0]]));
-    const groups = groupByParent(lines.flatMap(l => l.invoice_lines.map(a => ({ parent: amls.get(a), product: product(l), own: l.id, other: a }))));
-    const moveMeta = await S.odoo.fields("account.move");
-    const moves = new Map((await call("account.move", "read", [groups.map(g => g.parent), ["name", "state", "amount_total", "move_type", "invoice_origin"]])).map(m => [m.id, m]));
-    for (const g of groups) {
-      const mv = moves.get(g.parent);
-      cards.push({
-        kind: mv.move_type === "out_refund" ? "ใบลดหนี้" : "ใบแจ้งหนี้", model: "account.move", id: mv.id, ref: mv.name,
-        status: selLabel(moveMeta, "state", mv.state), amount: mv.amount_total,
-        via: ["sale.order.line.invoice_lines", "account.move.line.sale_line_ids"], table: "sale_order_line_invoice_rel",
-        extra: mv.invoice_origin ? `invoice_origin = "${mv.invoice_origin}"` : "",
-        cols: ["SO line", "INV line"], lines: g.lines, domain: `[('invoice_line_ids.sale_line_ids.order_id', '=', ${id})]`
-      });
+  const parentO2m = await call("ir.model.fields", "search_read", [[["ttype", "=", "one2many"], ["relation", "in", targets], ["model", "!=", model]], FIELD_INFO]);
+  const docModels = new Set((await call("ir.model.fields", "search_read", [[["model", "in", [...new Set(parentO2m.map(f => f.model))]], ["name", "=", "state"]], ["model"]])).map(f => f.model));
+  const parentsOf = new Map();
+  for (const f of parentO2m) {
+    if (!docModels.has(f.model) || !f.relation_field) continue;
+    const list = parentsOf.get(f.relation) || [];
+    if (!list.some(c => c.model === f.model && c.field === f.relation_field)) list.push({ model: f.model, field: f.relation_field, o2m: f.name });
+    parentsOf.set(f.relation, list);
+  }
+  const useful = links.filter(f => parentsOf.has(f.relation));
+  if (!useful.length) return [];
+  const targetRel = await call("ir.model.fields", "search_read", [[["model", "in", [...new Set(useful.map(f => f.relation))]], ["relation", "in", lineModels]], FIELD_INFO]);
+
+  const raw = [];
+  for (const [lf, lm] of lineFields) {
+    const fs = useful.filter(f => f.model === lm.relation);
+    if (!fs.length) continue;
+    const lineMeta = await S.odoo.fields(lm.relation);
+    const labelField = lineMeta.product_id ? "product_id" : lineMeta.name ? "name" : "display_name";
+    const lines = await call(lm.relation, "read", [rec[lf].slice(0, LINE_LIMIT), [labelField, ...fs.map(f => f.name)]]);
+    for (const l of lines) {
+      const label = Array.isArray(l[labelField]) ? l[labelField][1] : l[labelField] || `#${l.id}`;
+      for (const f of fs) {
+        const v = l[f.name];
+        for (const other of Array.isArray(v) ? (f.ttype === "many2one" ? [v[0]] : v) : v ? [v] : []) {
+          raw.push({ field: f, own: l.id, other, label, ownParentField: lm.relation_field });
+        }
+      }
+    }
+  }
+  if (!raw.length) return [];
+
+  const parentOfLine = new Map();
+  for (const t of new Set(raw.map(r => r.field.relation))) {
+    const candidates = parentsOf.get(t);
+    const ids = [...new Set(raw.filter(r => r.field.relation === t).map(r => r.other))];
+    for (const r of await call(t, "read", [ids, candidates.map(c => c.field)])) {
+      const p = resolveParent(candidates, r);
+      if (p) parentOfLine.set(`${t}|${r.id}`, { ...p, o2m: candidates.find(c => c.field === p.field).o2m });
     }
   }
 
-  const moves = await call("stock.move", "search_read", [[["sale_line_id", "in", so.order_line]], ["picking_id", "sale_line_id"]]).catch(() => []);
-  const withPicking = moves.filter(m => m.picking_id);
-  if (withPicking.length) {
-    const byLine = new Map(lines.map(l => [l.id, product(l)]));
-    const groups = groupByParent(withPicking.map(m => ({ parent: m.picking_id[0], product: byLine.get(m.sale_line_id[0]) || "", own: m.sale_line_id[0], other: m.id })));
-    const pickMeta = await S.odoo.fields("stock.picking");
-    const picks = new Map((await call("stock.picking", "read", [groups.map(g => g.parent), ["name", "state", "origin"]])).map(p => [p.id, p]));
-    for (const g of groups) {
-      const p = picks.get(g.parent);
-      cards.push({
-        kind: "ใบส่งของ", model: "stock.picking", id: p.id, ref: p.name, status: selLabel(pickMeta, "state", p.state), amount: null,
-        via: ["sale.order.line.move_ids", "stock.move.sale_line_id"], table: "",
-        extra: p.origin ? `origin = "${p.origin}"` : "", cols: ["SO line", "stock.move"], lines: g.lines, domain: `[('sale_id', '=', ${id})]`
-      });
-    }
+  const pairs = [];
+  const linkOf = new Map();
+  for (const r of raw) {
+    const p = parentOfLine.get(`${r.field.relation}|${r.other}`);
+    if (!p || (p.model === model && p.id === id)) continue;
+    const via = `${r.field.model}.${r.field.name}`;
+    linkOf.set(via, { f: r.field, parent: p, ownParentField: r.ownParentField });
+    pairs.push({ parentModel: p.model, parentId: p.id, via, label: r.label, own: r.own, other: r.other });
   }
-  return cards;
-}
+  const groups = groupLinks(pairs).sort((a, b) => a.parentModel.localeCompare(b.parentModel));
 
-async function invoiceLinks(id) {
-  const mv = await readOne("account.move", id, ["invoice_line_ids"]);
-  if (!mv.invoice_line_ids.length) return [];
-  const amls = await call("account.move.line", "read", [mv.invoice_line_ids, ["name", "product_id", "sale_line_ids"]]);
-  const solIds = [...new Set(amls.flatMap(a => a.sale_line_ids))];
-  if (!solIds.length) return [];
-  const sols = new Map((await call("sale.order.line", "read", [solIds, ["order_id"]])).map(s => [s.id, s.order_id[0]]));
-  const groups = groupByParent(amls.flatMap(a => a.sale_line_ids.map(s => ({
-    parent: sols.get(s), product: a.product_id ? a.product_id[1] : a.name, own: a.id, other: s
-  }))));
-  const soMeta = await S.odoo.fields("sale.order");
-  const orders = new Map((await call("sale.order", "read", [groups.map(g => g.parent), ["name", "state", "amount_total"]])).map(o => [o.id, o]));
+  const docs = new Map();
+  for (const pm of new Set(groups.map(g => g.parentModel))) {
+    const pmeta = await S.odoo.fields(pm);
+    const extra = ORIGIN_FIELDS.filter(f => pmeta[f]);
+    const fieldsToRead = ["display_name", "state", ...(pmeta.amount_total ? ["amount_total"] : []), ...extra];
+    const ids = [...new Set(groups.filter(g => g.parentModel === pm).map(g => g.parentId))];
+    for (const d of await call(pm, "read", [ids, fieldsToRead])) docs.set(`${pm}|${d.id}`, { ...d, pmeta, extra, label: await modelName(pm) });
+  }
+
   return groups.map(g => {
-    const o = orders.get(g.parent);
+    const d = docs.get(`${g.parentModel}|${g.parentId}`);
+    const { f, parent, ownParentField } = linkOf.get(g.via);
+    const inverse = inverseField(f, targetRel);
+    const origin = d.extra.find(x => d[x]);
+    const path = inverse && ownParentField ? `${parent.o2m}.${inverse}.${ownParentField}` : null;
     return {
-      kind: "ใบสั่งขาย", model: "sale.order", id: o.id, ref: o.name, status: selLabel(soMeta, "state", o.state), amount: o.amount_total,
-      via: ["account.move.line.sale_line_ids", "sale.order.line.invoice_lines"], table: "sale_order_line_invoice_rel",
-      extra: "", cols: ["INV line", "SO line"], lines: g.lines, domain: `[('order_line.invoice_lines.move_id', '=', ${id})]`
+      kind: d.label, model: g.parentModel, id: g.parentId, ref: d.display_name,
+      status: selLabel(d.pmeta, "state", d.state), amount: d.amount_total ?? null,
+      via: [g.via, inverse ? `${f.relation}.${inverse}` : f.relation], parentField: `${f.relation}.${parent.field}`,
+      table: f.ttype === "many2many" ? f.relation_table : "", extra: origin ? `${origin} = "${d[origin]}"` : "",
+      cols: [f.model, f.relation], lines: g.lines,
+      domain: path ? formatDomain([[path, "=", id]]) : formatDomain([["id", "in", [g.parentId]]])
     };
   });
+}
+
+function inverseField(f, targetRel) {
+  const onTarget = targetRel.filter(t => t.model === f.relation && t.relation === f.model);
+  if (f.ttype === "one2many") return f.relation_field || null;
+  if (f.ttype === "many2many") return onTarget.find(t => t.ttype === "many2many" && t.relation_table === f.relation_table)?.name || null;
+  return onTarget.find(t => t.ttype === "one2many" && t.relation_field === f.name)?.name || null;
 }
 
 async function readPageLog() {
